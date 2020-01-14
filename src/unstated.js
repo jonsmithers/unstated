@@ -67,6 +67,60 @@ type SubscribeState = {};
 
 const DUMMY_STATE = {};
 
+export function useContainers(containers: ContainersType) {
+  let [instances, setInstances] = useState(null);
+  const map = useContext(StateContext);
+  if (!instances) {
+    instances = createInstances(map, containers);
+    setInstances(instances);
+  }
+  return instances;
+}
+
+function createInstances(
+  map: ContainerMapType | null,
+  containers: ContainersType,
+  _this
+): Array<ContainerType> {
+  if (_this) {
+    _this._unsubscribe();
+  }
+
+  if (map === null) {
+    throw new Error(
+      'You must wrap your <Subscribe> components with a <Provider>'
+    );
+  }
+
+  let safeMap = map;
+  let instances = containers.map(ContainerItem => {
+    let instance;
+
+    if (
+      typeof ContainerItem === 'object' &&
+      ContainerItem instanceof Container
+    ) {
+      instance = ContainerItem;
+    } else {
+      instance = safeMap.get(ContainerItem);
+
+      if (!instance) {
+        instance = new ContainerItem();
+        safeMap.set(ContainerItem, instance);
+      }
+    }
+
+    if (_this) {
+      instance.unsubscribe(_this.onUpdate);
+      instance.subscribe(_this.onUpdate);
+    }
+
+    return instance;
+  });
+
+  return instances;
+}
+
 export class Subscribe<Containers: ContainersType> extends React.Component<
   SubscribeProps<Containers>,
   SubscribeState
@@ -100,38 +154,7 @@ export class Subscribe<Containers: ContainersType> extends React.Component<
     map: ContainerMapType | null,
     containers: ContainersType
   ): Array<ContainerType> {
-    this._unsubscribe();
-
-    if (map === null) {
-      throw new Error(
-        'You must wrap your <Subscribe> components with a <Provider>'
-      );
-    }
-
-    let safeMap = map;
-    let instances = containers.map(ContainerItem => {
-      let instance;
-
-      if (
-        typeof ContainerItem === 'object' &&
-        ContainerItem instanceof Container
-      ) {
-        instance = ContainerItem;
-      } else {
-        instance = safeMap.get(ContainerItem);
-
-        if (!instance) {
-          instance = new ContainerItem();
-          safeMap.set(ContainerItem, instance);
-        }
-      }
-
-      instance.unsubscribe(this.onUpdate);
-      instance.subscribe(this.onUpdate);
-
-      return instance;
-    });
-
+    const instances = createInstances(map, containers, this.onUpdate);
     this.instances = instances;
     return instances;
   }
